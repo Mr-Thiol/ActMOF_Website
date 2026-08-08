@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+edboplus/
+.pytest_cache/
+test_engine.py
