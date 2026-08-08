@@ -1,22 +1,9 @@
----
-title: ActMOF - MOF Bayesian Optimization
-emoji: 🧪
-colorFrom: blue
-colorTo: indigo
-sdk: streamlit
-sdk_version: 1.35.0
-python_version: "3.10"
-app_file: app.py
-pinned: false
-license: mit
-short_description: Active-learning Bayesian optimization workflow for MOF synthesis.
----
 
 # ActMOF — MOF Bayesian Optimization Web Application
 
 An active-learning synthesis optimization web platform for Metal-Organic Frameworks (MOFs), modeled after the **EDBO+** interface (`doyle-lab-ucla/edboplus`).
 
-Ready for **Hugging Face Spaces** using the Streamlit SDK. Spaces installs runtime dependencies from `requirements.txt`; local development can still use `uv` with `pyproject.toml` and `uv.lock`.
+Ready for **Streamlit Community Cloud** using `uv`. Community Cloud detects `uv.lock`, installs the locked environment, and runs `app.py` with `streamlit run`.
 
 ---
 
@@ -39,15 +26,22 @@ Open `http://localhost:8501` in your browser.
 
 ---
 
-## Hugging Face Spaces Deployment
+## Streamlit Community Cloud Deployment
 
-This repository is configured for a Streamlit Space synced from GitHub:
+This repository is configured for Streamlit Community Cloud from GitHub:
 
-1. Create a new Hugging Face Space with **SDK = Streamlit**.
-2. Connect or push this GitHub repository to the Space.
-3. Hugging Face reads the README YAML block, launches `app.py`, and installs packages from `requirements.txt`.
+1. Push the repository to GitHub with `app.py`, `pyproject.toml`, and `uv.lock` at the repo root.
+2. Go to `share.streamlit.io` and create a new app from the GitHub repository.
+3. Set the entrypoint file to `app.py`.
+4. In Advanced settings, choose a Python version compatible with `pyproject.toml` (`>=3.9`; Python 3.10 or 3.11 is a conservative choice).
+5. Deploy. Community Cloud will use `uv.lock` as the first-priority dependency file.
 
-Do not launch the hosted app with `uv run app.py`; Streamlit apps must be started through `streamlit run app.py`, which Hugging Face handles automatically from the Space metadata.
+For local testing, run the same app shape from the repository root:
+
+```bash
+uv sync --frozen
+uv run streamlit run app.py
+```
 
 ---
 
@@ -57,10 +51,9 @@ Do not launch the hosted app with `uv run app.py`; Streamlit apps must be starte
 |------|-------------|
 | `app.py` | **Main Streamlit Web Application** (EDBO+-inspired UI workflow) |
 | `bo_engine.py` | Standalone BO & GP engine (Matern 3/2 & 5/2, Calibrated Transfer Prior, Matplotlib plotting) |
-| `requirements.txt` | Hugging Face Spaces dependency install file |
-| `.streamlit/config.toml` | Streamlit runtime configuration for hosted execution |
-| `pyproject.toml` | Local project configuration and dependency specifications |
-| `uv.lock` | Lockfile for reproducible local `uv` environments |
+| `.streamlit/config.toml` | Streamlit runtime configuration for Community Cloud |
+| `pyproject.toml` | Project metadata and direct dependency specifications |
+| `uv.lock` | Streamlit Community Cloud and local `uv` dependency lockfile |
 | `student_bo_app_v109.py` | Desktop GUI version (Tkinter) |
 | `one_click_build_mof_bo_student_app_v109.py` | PyInstaller Windows `.exe` builder |
 
