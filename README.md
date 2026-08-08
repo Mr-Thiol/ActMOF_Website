@@ -5,16 +5,18 @@ colorFrom: blue
 colorTo: indigo
 sdk: streamlit
 sdk_version: 1.35.0
+python_version: "3.10"
 app_file: app.py
 pinned: false
 license: mit
+short_description: Active-learning Bayesian optimization workflow for MOF synthesis.
 ---
 
 # ActMOF — MOF Bayesian Optimization Web Application
 
 An active-learning synthesis optimization web platform for Metal-Organic Frameworks (MOFs), modeled after the **EDBO+** interface (`doyle-lab-ucla/edboplus`).
 
-Hosted directly on **Hugging Face Spaces** using Streamlit SDK and managed with `uv` (`pyproject.toml` and `uv.lock`).
+Ready for **Hugging Face Spaces** using the Streamlit SDK. Spaces installs runtime dependencies from `requirements.txt`; local development can still use `uv` with `pyproject.toml` and `uv.lock`.
 
 ---
 
@@ -37,16 +39,30 @@ Open `http://localhost:8501` in your browser.
 
 ---
 
+## Hugging Face Spaces Deployment
+
+This repository is configured for a Streamlit Space synced from GitHub:
+
+1. Create a new Hugging Face Space with **SDK = Streamlit**.
+2. Connect or push this GitHub repository to the Space.
+3. Hugging Face reads the README YAML block, launches `app.py`, and installs packages from `requirements.txt`.
+
+Do not launch the hosted app with `uv run app.py`; Streamlit apps must be started through `streamlit run app.py`, which Hugging Face handles automatically from the Space metadata.
+
+---
+
 ## 📁 Repository Structure
 
 | File | Description |
 |------|-------------|
-| [`app.py`](file:///home/reptiman/research/ActMOF_Website/app.py) | **Main Streamlit Web Application** (EDBO+-inspired UI workflow) |
-| [`bo_engine.py`](file:///home/reptiman/research/ActMOF_Website/bo_engine.py) | Standalone BO & GP engine (Matérn 3/2 & 5/2, Calibrated Transfer Prior, Matplotlib plotting) |
-| [`pyproject.toml`](file:///home/reptiman/research/ActMOF_Website/pyproject.toml) | Project configuration and dependency specifications |
-| [`uv.lock`](file:///home/reptiman/research/ActMOF_Website/uv.lock) | Lockfile for reproducible environment installations |
-| [`student_bo_app_v109.py`](file:///home/reptiman/research/ActMOF_Website/student_bo_app_v109.py) | Desktop GUI version (Tkinter) |
-| [`one_click_build_mof_bo_student_app_v109.py`](file:///home/reptiman/research/ActMOF_Website/one_click_build_mof_bo_student_app_v109.py) | PyInstaller Windows `.exe` builder |
+| `app.py` | **Main Streamlit Web Application** (EDBO+-inspired UI workflow) |
+| `bo_engine.py` | Standalone BO & GP engine (Matern 3/2 & 5/2, Calibrated Transfer Prior, Matplotlib plotting) |
+| `requirements.txt` | Hugging Face Spaces dependency install file |
+| `.streamlit/config.toml` | Streamlit runtime configuration for hosted execution |
+| `pyproject.toml` | Local project configuration and dependency specifications |
+| `uv.lock` | Lockfile for reproducible local `uv` environments |
+| `student_bo_app_v109.py` | Desktop GUI version (Tkinter) |
+| `one_click_build_mof_bo_student_app_v109.py` | PyInstaller Windows `.exe` builder |
 
 ---
 
