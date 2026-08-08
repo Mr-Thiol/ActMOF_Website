@@ -1,5 +1,8 @@
 [server]
 headless = true
+# Cap upload size: experiment CSVs are typically well under 1 MB, while the
+# 200 MB default lets a single large file exhaust memory on a free-tier instance.
+maxUploadSize = 5
 
 [browser]
 gatherUsageStats = false

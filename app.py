@@ -36,6 +36,34 @@ from bo_engine import (
     valid_condition_values,
 )
 
+def _csv_safe_value(value: object) -> object:
+    """Prefix formula-like strings with a quote to prevent CSV injection.
+
+    Spreadsheet software (Excel, LibreOffice, WPS) evaluates a cell as a formula
+    when it starts with = + - @ or a tab/carriage return. Text columns such as
+    ``notes`` round-trip from uploaded CSVs into the export buttons, so a crafted
+    value could execute when a collaborator opens the downloaded file. Non-string
+    values are returned unchanged.
+    """
+    if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
+def _csv_safe_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Sanitize text cells before export. Returns a copy; the input is untouched.
+
+    Every column is mapped rather than filtering on ``dtype == object``: as of
+    pandas 3.x string columns report a ``str`` dtype, so a dtype check would make
+    this sanitization silently no-op on newer versions. ``_csv_safe_value`` does
+    its own isinstance check, which holds across pandas versions.
+    """
+    safe = df.copy()
+    for col in safe.columns:
+        safe[col] = safe[col].map(_csv_safe_value)
+    return safe
+
+
 # Set page config
 st.set_page_config(
     page_title="ActMOF — MOF Bayesian Optimization WebApp",
@@ -276,16 +304,21 @@ with tab_recommend:
                 completed_rows = df_exp.copy()
                 if has_exp_data and "q" in completed_rows.columns:
                     completed_rows = completed_rows[pd.to_numeric(completed_rows["q"], errors="coerce").notna()].copy()
-                sug_df, msg = engine.suggest_batch(
-                    completed_rows=completed_rows,
-                    all_rows=df_exp.copy() if has_exp_data else pd.DataFrame(),
-                    candidate_pool=st.session_state.candidate_pool,
-                )
-                for col in ["intensity", "fwhm", "q", "notes"]:
-                    if col not in sug_df.columns:
-                        sug_df[col] = np.nan if col != "notes" else ""
-                st.session_state.last_suggestions = sug_df
-                st.session_state.last_message = msg
+                try:
+                    sug_df, msg = engine.suggest_batch(
+                        completed_rows=completed_rows,
+                        all_rows=df_exp.copy() if has_exp_data else pd.DataFrame(),
+                        candidate_pool=st.session_state.candidate_pool,
+                    )
+                    for col in ["intensity", "fwhm", "q", "notes"]:
+                        if col not in sug_df.columns:
+                            sug_df[col] = np.nan if col != "notes" else ""
+                    st.session_state.last_suggestions = sug_df
+                    st.session_state.last_message = msg
+                except Exception as e:
+                    # Surface a readable message instead of a raw traceback when the
+                    # uploaded data contains non-numeric feature columns.
+                    st.error(f"Failed to initialize BO. Please check your data columns are numeric. Details: {e}")
 
     if has_session_prediction:
         st.caption("Initialize BO Optimization is disabled because this session already has active suggestions. Enter results below and click 'Update Model' to re-run.")
@@ -362,21 +395,27 @@ with tab_recommend:
                 with st.spinner("Re-fitting model and generating next batch suggestions..."):
                     engine = BOEngine(st.session_state.config)
                     completed_df = updated_exp[updated_exp["status"].astype(str) == "completed"].copy() if len(updated_exp) else pd.DataFrame()
-                    new_sug_df, msg = engine.suggest_batch(
-                        completed_rows=completed_df,
-                        all_rows=updated_exp,
-                        candidate_pool=st.session_state.candidate_pool,
-                    )
-                    for col in ["intensity", "fwhm", "q", "notes"]:
-                        if col not in new_sug_df.columns:
-                            new_sug_df[col] = np.nan if col != "notes" else ""
-                    st.session_state.last_suggestions = new_sug_df
-                    st.session_state.last_message = f"Batch results saved! Model re-fitted with {len(completed_df)} completed run(s). {msg}"
+                    try:
+                        new_sug_df, msg = engine.suggest_batch(
+                            completed_rows=completed_df,
+                            all_rows=updated_exp,
+                            candidate_pool=st.session_state.candidate_pool,
+                        )
+                        for col in ["intensity", "fwhm", "q", "notes"]:
+                            if col not in new_sug_df.columns:
+                                new_sug_df[col] = np.nan if col != "notes" else ""
+                        st.session_state.last_suggestions = new_sug_df
+                        st.session_state.last_message = f"Batch results saved! Model re-fitted with {len(completed_df)} completed run(s). {msg}"
+                    except Exception as e:
+                        # Batch results are already persisted above; only the follow-up
+                        # suggestion step failed, so report it without a traceback.
+                        st.error(f"Batch results saved, but generating next suggestions failed. Please check your data. Details: {e}")
+                        st.stop()
 
                 st.rerun()
 
         with col_dl:
-            csv_data = edited_sug_df[display_cols].to_csv(index=False).encode("utf-8")
+            csv_data = _csv_safe_df(edited_sug_df[display_cols]).to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Download Suggestions CSV",
                 data=csv_data,
@@ -418,7 +457,7 @@ with tab_data:
 
     with col_dl_all:
         if len(st.session_state.experiments) > 0:
-            all_csv = st.session_state.experiments.to_csv(index=False).encode("utf-8")
+            all_csv = _csv_safe_df(st.session_state.experiments).to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Export All Experiments CSV",
                 data=all_csv,
