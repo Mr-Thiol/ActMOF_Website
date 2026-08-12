@@ -2,6 +2,7 @@ import zipfile
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
 
 def find_intercept(df, peak_point, dir="both"):
   x, y = peak_point
@@ -19,12 +20,19 @@ def find_intercept(df, peak_point, dir="both"):
   x_intercept = (x2-x1)/(y2-y1)*(half_intensity-y1) + x1
   return x_intercept
 
-def load_and_calc_q(rasx):
+def load_rasx(rasx):
   with zipfile.ZipFile(rasx, "r") as archive:
     with archive.open("Data0/Profile0.txt") as profile_file:
       df = pd.read_csv(
         profile_file, sep=r"\s+", names=["2Theta", "Intensity"]
       )
+  return df
+
+def load_and_calc_q(rasx):
+  df = load_rasx(rasx)
+
+  fig, ax = plt.subplots()
+  ax.plot(df['2Theta'], df['Intensity'])
 
   max_idx = df['Intensity'].idxmax()
   peak_intensity = df.iloc[max_idx]['Intensity']
@@ -32,10 +40,19 @@ def load_and_calc_q(rasx):
   left_x, right_x = find_intercept(df, peak_point)
   half_width = right_x - left_x
 
+  segments = [
+    [(left_x, peak_intensity/2), (right_x, peak_intensity/2)],
+    [(left_x, peak_intensity/2), (left_x, 0)],
+    [(right_x, peak_intensity/2), (right_x, 0)],
+  ]
+  line_segments = LineCollection(segments, colors='red', linestyles='-')
+  ax.add_collection(line_segments)
+
   return {
     'peak_intensity': peak_intensity,
     'half_width': half_width,
-    'q': peak_intensity / half_width
+    'q': peak_intensity / half_width,
+    'fig': fig
   }
 
 if __name__ == "__main__":

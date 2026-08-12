@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from rasx_process import load_and_calc_q
+
 from bo_engine import (
     APP_NAME,
     APP_VERSION,
@@ -94,6 +96,8 @@ def init_session_state():
         st.session_state.last_message = ""
     if "uploaded_file_signature" not in st.session_state:
         st.session_state.uploaded_file_signature = None
+    if "suggestions_editor_version" not in st.session_state:
+        st.session_state.suggestions_editor_version = 0
 
 
 init_session_state()
@@ -286,6 +290,7 @@ with tab_recommend:
                         sug_df[col] = np.nan if col != "notes" else ""
                 st.session_state.last_suggestions = sug_df
                 st.session_state.last_message = msg
+                st.session_state.suggestions_editor_version += 1
 
     if has_session_prediction:
         st.caption("Initialize BO Optimization is disabled because this session already has active suggestions. Enter results below and click 'Update Model' to re-run.")
@@ -309,6 +314,7 @@ with tab_recommend:
             sug_df[show_cols],
             num_rows="fixed",
             use_container_width=True,
+            key=f"suggestions_editor_{st.session_state.suggestions_editor_version}",
             column_config={
                 "intensity": st.column_config.NumberColumn("Intensity (Measured)", min_value=0.0),
                 "fwhm": st.column_config.NumberColumn("FWHM (Measured)", min_value=0.01),
@@ -316,6 +322,64 @@ with tab_recommend:
                 "notes": st.column_config.TextColumn("Notes"),
             },
         )
+
+        st.markdown("#### Calculate Measurements from .rasx")
+        rasx_file = st.file_uploader(
+            "Drag and drop a .rasx file to calculate intensity, FWHM, and q Score",
+            type=["rasx"],
+            key="rasx_measurement_upload",
+        )
+        if rasx_file is not None:
+            try:
+                rasx_result = load_and_calc_q(io.BytesIO(rasx_file.getvalue()))
+                calculated_intensity = float(rasx_result["peak_intensity"])
+                calculated_fwhm = float(rasx_result["half_width"])
+                calculated_q = float(rasx_result["q"])
+
+                m_col1, m_col2, m_col3 = st.columns(3)
+                m_col1.metric("Calculated Intensity", f"{calculated_intensity:.4g}")
+                m_col2.metric("Calculated FWHM", f"{calculated_fwhm:.4g}")
+                m_col3.metric("Calculated q Score", f"{calculated_q:.4g}")
+                st.pyplot(rasx_result["fig"], use_container_width=True)
+
+                measurement_cols = [c for c in ["intensity", "fwhm", "q"] if c in edited_sug_df.columns]
+                if measurement_cols:
+                    numeric_measurements = edited_sug_df[measurement_cols].apply(pd.to_numeric, errors="coerce")
+                    rows_with_empty_measurement = numeric_measurements.isna().any(axis=1).tolist()
+                    default_row = next((i for i, is_empty in enumerate(rows_with_empty_measurement) if is_empty), 0)
+                else:
+                    default_row = 0
+
+                row_options = list(range(len(edited_sug_df)))
+
+                def format_feedback_row(row_pos: int) -> str:
+                    row = edited_sug_df.iloc[row_pos]
+                    batch_pos = row.get("batch_position", row_pos + 1)
+                    condition = ", ".join(f"{feature}={row.get(feature)}" for feature in FEATURES if feature in row)
+                    return f"Row {row_pos + 1} / batch position {batch_pos}: {condition}"
+
+                selected_row_pos = st.selectbox(
+                    "Choose the proposed-batch row to fill",
+                    options=row_options,
+                    index=default_row,
+                    format_func=format_feedback_row,
+                    key=f"rasx_fill_row_{st.session_state.suggestions_editor_version}",
+                )
+                if st.button("Fill Selected Row with Calculated Measurements", use_container_width=True):
+                    updated_suggestions = st.session_state.last_suggestions.copy().reset_index(drop=True)
+                    edited_rows = edited_sug_df.reset_index(drop=True)
+                    for col in show_cols:
+                        if col in updated_suggestions.columns and col in edited_rows.columns:
+                            updated_suggestions[col] = edited_rows[col]
+                    updated_suggestions.loc[selected_row_pos, "intensity"] = calculated_intensity
+                    updated_suggestions.loc[selected_row_pos, "fwhm"] = calculated_fwhm
+                    updated_suggestions.loc[selected_row_pos, "q"] = calculated_q
+                    st.session_state.last_suggestions = updated_suggestions
+                    st.session_state.suggestions_editor_version += 1
+                    st.success(f"Filled row {selected_row_pos + 1} with measurements from {rasx_file.name}.")
+                    st.rerun()
+            except Exception as exc:
+                st.error(f"Could not process .rasx file: {exc}")
 
         col_update, col_dl = st.columns([2, 1])
         with col_update:
@@ -372,6 +436,7 @@ with tab_recommend:
                             new_sug_df[col] = np.nan if col != "notes" else ""
                     st.session_state.last_suggestions = new_sug_df
                     st.session_state.last_message = f"Batch results saved! Model re-fitted with {len(completed_df)} completed run(s). {msg}"
+                    st.session_state.suggestions_editor_version += 1
 
                 st.rerun()
 
