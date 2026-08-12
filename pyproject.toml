@@ -5,6 +5,7 @@ description = "ActMOF Bayesian Optimization Web Application"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "fairmat-readers-xrd>=0.0.9",
     "matplotlib>=3.5.0",
     "numpy>=1.22.0",
     "pandas>=1.4.0",

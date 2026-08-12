@@ -4,3 +4,5 @@ __pycache__/
 edboplus/
 .pytest_cache/
 test_engine.py
+example_rasx.py
+*.rasx
