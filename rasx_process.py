@@ -1,4 +1,5 @@
 import zipfile
+from fairmat_readers_xrd import read_rigaku_rasx
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
@@ -33,16 +34,19 @@ def find_intercept(df, peak_point, dir="both"):
   return x_intercept
 
 def load_rasx(rasx):
-  with zipfile.ZipFile(rasx, "r") as archive:
-    with archive.open("Data0/Profile0.txt") as profile_file:
-      df = pd.read_csv(
-        profile_file, sep=r"\s+", names=["2Theta", "Intensity"]
-      )
-  return df
+  # with zipfile.ZipFile(rasx, "r") as archive:
+  #   with archive.open("Data0/Profile0.txt") as profile_file:
+  #     df = pd.read_csv(
+  #       profile_file, sep=r"\s+", names=["2Theta", "Intensity"]
+  #     )
+  data = read_rigaku_rasx(rasx)
+  # Extract X (2-Theta) and Y (Intensity) coordinate arrays
+  x_coords = data['2Theta']
+  y_coords = data["intensity"]
+  return pd.DataFrame({"2Theta": x_coords, "Intensity": y_coords})
 
 def load_and_calc_q(rasx):
   df = load_rasx(rasx)
-
   fig, ax = plt.subplots()
   ax.plot(df['2Theta'], df['Intensity'])
 
@@ -68,4 +72,6 @@ def load_and_calc_q(rasx):
   }
 
 if __name__ == "__main__":
-    print(load_and_calc_q("sample.rasx"))
+    calced = load_and_calc_q("MTV_MIL_160_R1.rasx")
+    print(calced)
+    calced['fig'].savefig("example_rasx.png")
