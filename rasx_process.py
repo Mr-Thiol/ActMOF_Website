@@ -9,15 +9,27 @@ def find_intercept(df, peak_point, dir="both"):
   half_intensity = y / 2
   if dir == 'left':
     df_sel = df[df['2Theta'] < x]
+    df_sel = df_sel.sort_values(by = '2Theta', ascending = False).reset_index(drop=True)
   elif dir == 'right':
     df_sel = df[df['2Theta'] > x]
+    df_sel = df_sel.sort_values(by = '2Theta', ascending = True).reset_index(drop=True)
   else:
     return (find_intercept(df, peak_point, 'left'), find_intercept(df, peak_point, 'right'))
-  df_sel['diff'] = np.abs(df_sel['Intensity'] - half_intensity)
-  closest = df_sel.nsmallest(2, 'diff')
-  x1, y1 = closest[['2Theta', 'Intensity']].iloc[0]
-  x2, y2 = closest[['2Theta', 'Intensity']].iloc[1]
-  x_intercept = (x2-x1)/(y2-y1)*(half_intensity-y1) + x1
+  df_sel = df_sel[['2Theta', 'Intensity']]
+  x1, y1 = None, None
+  x2, y2 = x, y
+  for row in df_sel.itertuples():
+    x1, y1 = x2, y2
+    _, x2, y2 = row
+    if y2 < half_intensity:
+      break
+  if x1 is not None:
+    if y1 != y2:
+      x_intercept = (x2-x1)/(y2-y1)*(half_intensity-y1) + x1
+    else:
+      x_intercept = (x2+x1)/2
+  else:
+    x_intercept = -1e12 if dir=='left' else 1e12
   return x_intercept
 
 def load_rasx(rasx):
