@@ -33,6 +33,7 @@ from bo_engine import (
     BOEngine,
     calc_q,
     condition_tuple,
+    format_record_id,
     make_figure,
     now_text,
     valid_condition_values,
@@ -174,7 +175,7 @@ with st.sidebar:
             ref_rows = []
             for idx, row in REFERENCE_DF.iterrows():
                 ref_rows.append({
-                    "record_id": idx + 1,
+                    "record_id": format_record_id(idx + 1),
                     "round": 0,
                     "batch_position": idx + 1,
                     "status": "completed",
@@ -206,11 +207,12 @@ with st.sidebar:
 
 
 # EDBO+ Main Workflow Tabs
-tab_dash, tab_recommend, tab_data, tab_wizard = st.tabs([
+tab_dash, tab_recommend, tab_data, tab_wizard, tab_help = st.tabs([
     "📊 Dashboard & Diagnostics",
     "🧪 Batch Recommendations",
     "📝 Experiment Entry & Data",
     "🧙 Planning Wizard",
+    "❓ Help & Guide",
 ])
 
 # -----------------------------------------------------------------------------
@@ -389,7 +391,7 @@ with tab_recommend:
                 new_rows = []
 
                 for pos, (_idx, row) in enumerate(edited_sug_df.iterrows(), start=1):
-                    rec_id = len(st.session_state.experiments) + pos
+                    rec_id = format_record_id(len(st.session_state.experiments) + pos)
                     raw_int = row.get("intensity")
                     raw_fwhm = row.get("fwhm")
                     raw_q = row.get("q")
@@ -556,3 +558,137 @@ with tab_wizard:
             st.session_state.config["transfer_prior_rounds"] = int(m_calc)
             st.success("Successfully applied wizard settings to project configuration!")
             st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# TAB 5: Help & Guide
+# -----------------------------------------------------------------------------
+with tab_help:
+    st.subheader("❓ How to Use ActMOF")
+    st.markdown(
+        "Each section below gives a **plain-language** explanation first, followed by the "
+        "**rigorous** technical definition — skim for \"what do I click\" or expand for \"what is "
+        "the app actually computing.\" The full write-up also lives in `HELP.md` in the repository."
+    )
+
+    st.markdown("### 🚀 Quickstart")
+    st.markdown(
+        """
+1. *(Optional)* **Planning Wizard tab** — enter experiments per batch and a rough min–max estimate of
+   how many batches your project will take, then click **Apply Wizard Settings**.
+2. **Sidebar → Optimization Setup** — set project name, batch size, kernel, and acquisition function.
+   Defaults work well for most projects.
+3. *(Optional)* **Sidebar → Calibrated Transfer Prior** — turn on if you want your first few batches
+   to be informed by the built-in benchmark data instead of pure random exploration.
+4. **Batch Recommendations tab → ⚡ Initialize BO Optimization** — generates your first batch of
+   conditions to try.
+5. Run the reactions. Enter `intensity` + `fwhm` directly, **or** upload the `.rasx` XRD file for a
+   row and click **Fill Selected Row with Calculated Measurements**.
+6. Click **🔄 Update Model & Save Batch Results** — saves your results, re-fits the model, and
+   proposes the next batch. Repeat from step 5.
+7. Check the **Dashboard tab** anytime for progress plots and model diagnostics.
+        """
+    )
+
+    with st.expander("🧪 What does the app optimize? (the q score)", expanded=False):
+        st.markdown(
+            "**Plain language:** After a reaction, you scan the powder with XRD. A well-crystallized "
+            "MOF gives one tall, narrow diffraction peak. `q` rewards *tall and narrow* — bigger q "
+            "means a sharper, more crystalline product. A failed/amorphous reaction gets `q = 0`.\n\n"
+            "**Rigorously:** `q = peak_intensity / FWHM`, where FWHM (full width at half maximum) is "
+            "found by linear interpolation between the two points nearest the peak on the intensity "
+            "trace, on each side of the peak. Uploading a `.rasx` file computes this automatically; "
+            "you can also type `intensity`/`fwhm`, or `q` itself, directly. The app **maximizes** q — "
+            "it is chasing crystallinity/phase purity, not yield or particle size."
+        )
+
+    with st.expander("📦 Rounds, batches, and status", expanded=False):
+        st.markdown(
+            "Every proposed condition becomes one row in your experiment log. A **batch** is a set of "
+            "`k` conditions proposed together (`k` = *Experiments per Batch*). A **round** is the "
+            "0-indexed counter for batches (`round = batch_number - 1`). Row `status` is `suggested` "
+            "(proposed, no result yet), `completed` (has a valid measurement, counts as training "
+            "data), or `cancelled` (excluded from the model without deleting the row). Record IDs are "
+            "formatted `R00001`, `R00002`, … in creation order."
+        )
+
+    with st.expander("🧠 How are the next conditions chosen?", expanded=False):
+        st.markdown(
+            "**Plain language:** With fewer than 3 completed results (and transfer prior off), the "
+            "app samples spread-out random conditions — there isn't enough data yet to learn a trend. "
+            "Once you have 3+ results with some variation in q, it proposes the batch of conditions "
+            "that best balances *predicted high q* against *genuine uncertainty*, while keeping the "
+            "batch spread out so you're not wasting reactions on near-duplicates.\n\n"
+            "**Rigorously:** A NumPy-only Gaussian Process (Matérn 3/2 or 5/2 kernel) is fit to "
+            "`(scaled condition) → target`, where target is optionally `ln(1+q)` (default on, dampens "
+            "outlier-large q values). Length-scale and noise are chosen by grid search minimizing the "
+            "negative log marginal likelihood, with Cholesky-jitter fallback for stability. ~15,000 "
+            "random candidates are scored with Expected Improvement or Probability of Improvement "
+            "against the best completed result, and a batch of `k` is picked greedily, trading "
+            "acquisition score against minimum distance to already-chosen points in the batch."
+        )
+
+    with st.expander("🔄 What is the Calibrated Transfer Prior?", expanded=False):
+        st.markdown(
+            "**Plain language:** A brand-new project has nothing to learn from for its first few "
+            "batches, so early suggestions would otherwise be random guesses. This app ships with a "
+            "built-in reference dataset of prior MOF syntheses. Turning this on lets the app borrow "
+            "patterns from that data for your first `M` batches, then automatically hands control "
+            "over to your own data as it accumulates.\n\n"
+            "**Rigorously:** A reference GP is fit once on the built-in 96-point benchmark set. For "
+            "each of your completed points, its reference prediction `mu_ref(x)` is linearly "
+            "calibrated against your real `y = ln(1+q)` via ridge-regularized least squares "
+            r"($y \approx a + b \cdot \mathrm{mu\_ref}(x)$), regularized toward `b=1` in proportion to "
+            "`1/n_student` (with `n_student=0` giving the pure-reference `a=0, b=1`). With 3+ points, "
+            "a second GP models the residuals between your results and the calibrated prediction. "
+            "The prior is used only through batch `M`, where "
+            r"$M = \lfloor \text{mean(iteration range)} \times \text{transfer fraction} \rfloor$ "
+            "(or set manually) — after that the app switches to a purely student-data GP."
+        )
+
+    with st.expander("📈 Reading the Dashboard panels", expanded=False):
+        st.markdown(
+            """
+| Panel | What it tells you |
+|---|---|
+| Best q so far | Running best q across completed experiments — should trend up. |
+| q by completed experiment | Raw q per experiment, in run order — spot noisy batches. |
+| Observed vs predicted q | Model fit quality; points near the diagonal = good fit. |
+| Uncertainty landscape | Where the model is confident vs unsure among candidates. |
+| How suggestions are proposed | Acquisition score vs predicted q; stars = your open suggestions. |
+| Experiment map | `metal_amount` vs `reaction_temperature`, colored by q. |
+            """
+        )
+
+    with st.expander("📄 CSV import/export format", expanded=False):
+        st.markdown(
+            "Uploaded CSVs must contain the five feature columns (`metal_amount`, `modulator`, "
+            "`add_solvent`, `reaction_time`, `reaction_temperature`). If `status` is missing it "
+            "defaults to `completed`; if `q` is missing but `intensity`/`fwhm` are present, `q` is "
+            "computed for you. Exports always use the full schema (`record_id, round, batch_position, "
+            "status, <features>, intensity, fwhm, q, predicted_q_mean, predicted_q_sd, "
+            "acquisition_value, notes, created_at, updated_at`) — see `experiments.csv` in the "
+            "repository for a worked example."
+        )
+
+    with st.expander("🛠️ Troubleshooting / FAQ", expanded=False):
+        st.markdown(
+            """
+- **"Initialize BO Optimization" is greyed out.** It's disabled once you already have an active batch
+  of suggestions in this session. Save results with *Update Model*, or upload a new CSV, to re-enable
+  it.
+- **Dashboard says "No completed experiments yet."** It only reflects *completed* rows. A freshly
+  initialized batch is `suggested` until you enter results and click *Update Model & Save Batch
+  Results*.
+- **Predicted q looks huge compared to any q I've measured.** Most visible in the reference-only phase
+  of the transfer prior (`n_student=0`), where the model is extrapolating purely from the built-in
+  benchmark GP. It pulls toward realistic values once a few of your own completed results calibrate it.
+- **The status message says "Initial sampling was used…" or "Exploratory sampling…".** Either you have
+  under 3 completed current-project points with transfer prior off, or your q values so far are all
+  identical — the app deliberately explores rather than exploits until there's a real trend to model.
+- **I want to reset everything.** Sidebar → *Clear All Data* clears the experiment log and any active
+  suggestions in this session (it does not affect anything already exported).
+            """
+        )
+
+    st.caption(f"{APP_NAME} · v{APP_VERSION}")

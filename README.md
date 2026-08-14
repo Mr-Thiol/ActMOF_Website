@@ -5,6 +5,8 @@ An active-learning synthesis optimization web platform for Metal-Organic Framewo
 
 Ready for **Streamlit Community Cloud** using `uv`. Community Cloud detects `uv.lock`, installs the locked environment, and runs `app.py` with `streamlit run`.
 
+📖 **New here?** See [`HELP.md`](HELP.md) for a full user guide (or the in-app **❓ Help & Guide** tab), covering the workflow, the `q` score, how recommendations are chosen, and the calibrated transfer prior.
+
 ---
 
 ## 🚀 Quickstart with `uv`
@@ -51,6 +53,7 @@ uv run streamlit run app.py
 |------|-------------|
 | `app.py` | **Main Streamlit Web Application** (EDBO+-inspired UI workflow) |
 | `bo_engine.py` | Standalone BO & GP engine (Matern 3/2 & 5/2, Calibrated Transfer Prior, Matplotlib plotting) |
+| `HELP.md` | Full user guide (also mirrored in the app's ❓ Help & Guide tab) |
 | `.streamlit/config.toml` | Streamlit runtime configuration for Community Cloud |
 | `pyproject.toml` | Project metadata and direct dependency specifications |
 | `uv.lock` | Streamlit Community Cloud and local `uv` dependency lockfile |

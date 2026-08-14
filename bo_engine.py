@@ -200,7 +200,7 @@ REFERENCE_X = np.array([
     [15,7,13,11,18],[14,7,11,11,20],[7,6,20,11,15],
     [15,7,14,11,24],[15,6,10,11,14],[15,7,10,11,12],
     [15,8,12,11,19],[9,8,13,7,20],[21,6,13,12,19],
-    [6,6,19,12,30],[15,8,9,12,19],[75,12,6,11,18],
+    [6,6,12,11,20],[15,8,9,12,19],[75,12,6,11,18],
     [25,13,14,7,24],[17,13,16,12,24],[38,13,16,8,24],
     [65,5,0,12,24],[74,7,23,1,16],[5,7,21,12,20],
     [15,7,16,12,29],[16,7,15,11,18],[62,10,12,10,17],
@@ -289,6 +289,15 @@ REFERENCE_FWHM = np.array([
 
 def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_record_id(n: object) -> str:
+    """Format a 1-based row count as a stable 'R00001'-style record id."""
+    try:
+        n_int = int(n)
+    except Exception:
+        n_int = 0
+    return f"R{n_int:05d}"
 
 
 def calc_q(intensity: object, fwhm: object, q_value: object = None) -> float:
