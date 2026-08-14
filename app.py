@@ -306,14 +306,25 @@ with tab_recommend:
         st.caption("Enter measured Intensity and FWHM (or q) directly into the spreadsheet table below:")
 
         display_cols = [f for f in FEATURES if f in sug_df.columns]
+        measurement_cols = [c for c in ["intensity", "fwhm", "q"] if c in sug_df.columns]
         extra_cols = [c for c in ["predicted_q_mean", "predicted_q_sd", "acquisition_value"] if c in sug_df.columns]
-        feedback_cols = ["intensity", "fwhm", "q", "notes"]
+        feedback_cols = measurement_cols + ["notes"]
 
-        full_cols = display_cols + extra_cols + feedback_cols
+        # Column order matches experiments.csv: features, then intensity/fwhm/q,
+        # then the model's predicted stats, then notes.
+        full_cols = display_cols + measurement_cols + extra_cols + ["notes"]
         show_cols = [c for c in full_cols if c in sug_df.columns]
 
+        # Preview record IDs (R00016, R00017, ...) matching what will be assigned
+        # when this batch is saved, so the leftmost row label reads like experiments.csv
+        # instead of a bare 0, 1, 2, ... index.
+        next_start = len(st.session_state.experiments) + 1
+        preview_ids = [format_record_id(next_start + i) for i in range(len(sug_df))]
+        display_sug_df = sug_df[show_cols].copy()
+        display_sug_df.index = pd.Index(preview_ids, name="record_id")
+
         edited_sug_df = st.data_editor(
-            sug_df[show_cols],
+            display_sug_df,
             num_rows="fixed",
             use_container_width=True,
             key=f"suggestions_editor_{st.session_state.suggestions_editor_version}",
@@ -496,8 +507,14 @@ with tab_data:
 
     st.markdown("#### Interactive History Table")
     if len(st.session_state.experiments) > 0:
-        edited_df = st.data_editor(
-            st.session_state.experiments,
+        # Show record_id (R00001, R00002, ...) as the leftmost row label instead
+        # of a bare 0, 1, 2, ... index, matching experiments.csv.
+        display_hist_df = st.session_state.experiments.copy()
+        if "record_id" in display_hist_df.columns:
+            display_hist_df = display_hist_df.set_index("record_id")
+
+        edited_hist_display = st.data_editor(
+            display_hist_df,
             num_rows="dynamic",
             use_container_width=True,
             column_config={
@@ -507,6 +524,9 @@ with tab_data:
                 "q": st.column_config.NumberColumn("q Score", min_value=0.0),
             },
         )
+        # Restore record_id as a normal leading column (matching experiments.csv)
+        # before this data is used or persisted further.
+        edited_df = edited_hist_display.reset_index() if edited_hist_display.index.name == "record_id" else edited_hist_display
         if st.button("💾 Save Table Edits", type="primary"):
             for idx, row in edited_df.iterrows():
                 if pd.notna(row.get("intensity")) and pd.notna(row.get("fwhm")) and float(row["fwhm"]) > 0:

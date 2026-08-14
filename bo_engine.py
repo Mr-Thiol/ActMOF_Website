@@ -301,26 +301,23 @@ def format_record_id(n: object) -> str:
 
 
 def calc_q(intensity: object, fwhm: object, q_value: object = None) -> float:
-    """Calculate the reaction quality score q = intensity / fwhm."""
-    if q_value is not None:
-        try:
-            fv = float(q_value)
-            if np.isfinite(fv):
-                return float(np.clip(fv, 0.0, 1e7))
-        except Exception:
-            pass
+    """Calculate q from intensity and FWHM. A directly entered q value has priority.
 
-    try:
-        int_val = float(intensity)
-        fwhm_val = float(fwhm)
-        if not np.isfinite(int_val) or not np.isfinite(fwhm_val):
-            return 0.0
-        if int_val <= 0.0 or fwhm_val <= 0.0:
-            return 0.0
-        q = int_val / fwhm_val
-        return float(np.clip(q, 0.0, 1e7))
-    except Exception:
+    fwhm == 30 is the sentinel the reference/benchmark dataset uses for "no real
+    diffraction peak found" (the peak search fell back to its full-width bound),
+    so it is treated as a failed run (q = 0) regardless of any residual intensity
+    reading, matching the desktop student app's calc_q.
+    """
+    q_parsed = parse_float_or_nan(q_value)
+    if np.isfinite(q_parsed):
+        return float(q_parsed)
+    intensity_parsed = parse_float_or_nan(intensity)
+    fwhm_parsed = parse_float_or_nan(fwhm)
+    if not np.isfinite(intensity_parsed) or not np.isfinite(fwhm_parsed):
+        return np.nan
+    if fwhm_parsed == 30 or fwhm_parsed <= 0 or intensity_parsed <= 0:
         return 0.0
+    return float(int(round(float(intensity_parsed) / float(fwhm_parsed))))
 
 
 def parse_float_or_nan(value: object) -> float:
@@ -389,10 +386,17 @@ def valid_condition_values(values: Dict[str, object]) -> Tuple[bool, str]:
 
 def make_reference_df() -> pd.DataFrame:
     df = pd.DataFrame(REFERENCE_X, columns=FEATURES)
+    df[FEATURES] = df[FEATURES].astype(int)
     df["intensity"] = REFERENCE_INTENSITY
     df["fwhm"] = REFERENCE_FWHM
-    df["q"] = [calc_q(i, f) for i, f in zip(REFERENCE_INTENSITY, REFERENCE_FWHM)]
-    return df
+    df["q"] = [calc_q(i, f) for i, f in zip(df["intensity"], df["fwhm"])]
+    # Average duplicate reference conditions.
+    grouped = df.groupby(FEATURES, as_index=False).agg(
+        intensity=("intensity", "mean"),
+        fwhm=("fwhm", "mean"),
+        q=("q", "mean"),
+    )
+    return grouped
 
 
 REFERENCE_DF = make_reference_df()
