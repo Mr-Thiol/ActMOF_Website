@@ -57,7 +57,7 @@ Download the project file before you leave: a browser session is not stored on t
 | **Dashboard** | Six diagnostic panels (best `q`, `q` of every experiment, model fit, uncertainty, acquisition, experiment map), downloadable as `.png` |
 | **Project files** | Download the whole project (settings, experiments, candidate list, proposed batch) as one `.zip`, upload it later to continue |
 | **Candidate lists** | Upload a `.csv` of allowed conditions to restrict what can be proposed |
-| **Result entry** | `q` is calculated as soon as intensity and FWHM are entered; intensity `0` sets the no-product placeholder; empty cells are flagged; a saved batch can be reopened and corrected |
+| **Result entry** | `q` is calculated once intensity and FWHM of the whole batch are entered; intensity `0` sets the no-product placeholder; empty cells are flagged; a saved batch can be reopened and corrected |
 | **Experiment table** | Upload, edit and export all experiments as `.csv` |
 | **Transfer prior** | Optional: the first batches are guided by the 95 measured MOF-321 conditions, calibrated to your own results as they arrive |
 | **Planning wizard** | Estimates the number of batches for which the transfer prior is used |
@@ -141,7 +141,20 @@ Run it with `python student_bo_app_v109.py`, or build a Windows `.exe` with
 
 - **[deep-synthesis/ActMOF](https://github.com/deep-synthesis/ActMOF)**: the landscape of 6,101,172 conditions, the benchmark of
   39 search strategies and the data of the six validation campaigns.
-- The layout of the app follows [EDBO+](https://github.com/doyle-lab-ucla/edboplus).
+
+## Acknowledgments
+
+The workflow of the app (propose a batch, enter the results, refit) follows the EDBO and EDBO+ platforms of the
+Doyle group:
+
+- Shields, B. J.; Stevens, J.; Li, J.; Parasram, M.; Damani, F.; Martinez Alvarado, J. I.; Janey, J. M.;
+  Adams, R. P.; Doyle, A. G. Bayesian reaction optimization as a tool for chemical synthesis.
+  *Nature* **2021**, *590*, 89-96.
+  [doi:10.1038/s41586-021-03213-y](https://doi.org/10.1038/s41586-021-03213-y)
+- Garrido Torres, J. A.; Lau, S. H.; Anchuri, P.; Stevens, J. M.; Tabora, J. E.; Li, J.; Borovika, A.;
+  Adams, R. P.; Doyle, A. G. A Multi-Objective Active Learning Platform and Web App for Reaction Optimization.
+  *J. Am. Chem. Soc.* **2022**, *144* (43), 19999-20007.
+  [doi:10.1021/jacs.2c08592](https://doi.org/10.1021/jacs.2c08592)
 
 ## Citation
 

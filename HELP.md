@@ -92,9 +92,10 @@ an exported `experiments.csv`.
    - Upload the `.rasx` XRD file for a row and click *Fill Selected Row with Calculated Measurements*
      — the app computes intensity, FWHM, and q for you and shows the fitted half-width markers on the
      diffractogram.
-   As soon as intensity and FWHM of a row are entered, `q` is calculated. For a synthesis without
-   product enter intensity `0`: FWHM is then set to the placeholder `30` and `q` to `0`. Rows that are
-   still empty are listed in a warning under the table.
+   When intensity and FWHM of all rows of the batch are entered, `q` is calculated for the whole
+   batch at once. For a synthesis without product enter intensity `0` and leave FWHM empty: FWHM is
+   then set to the placeholder `30` and `q` to `0`. Rows that are still empty are listed in a warning
+   under the table.
 6. Click **🔄 Update Model & Save Batch Results** — this saves your measurements into the experiment
    log, immediately re-fits the model, and proposes the next batch. Repeat from step 5.
 7. **Dashboard tab** — at any point, check the 6-panel diagnostics: best-q-so-far progress, q per

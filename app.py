@@ -2,7 +2,7 @@
 """
 app.py - Streamlit Web Application for ActMOF Bayesian Optimization
 
-Multi-tab workflow based on EDBO+ user interaction choices:
+Multi-tab workflow:
 Tab 1: Dashboard & Visual Diagnostics
 Tab 2: Batch Recommendations & Results Entry (Initialize BO + Automatic Model Rerun)
 Tab 3: Experiment Data & History
@@ -57,7 +57,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for EDBO+-style branding and clean card layouts
+# Custom CSS for branding and clean card layouts
 st.markdown(
     """
     <style>
@@ -130,11 +130,11 @@ with col_logo:
 with col_header:
     st.markdown('<div class="main-title">ActMOF — MOF Bayesian Optimization</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="sub-title">Active-learning synthesis optimization web platform based on EDBO+ workflow.</div>',
+        '<div class="sub-title">Active-learning optimization of MOF synthesis conditions.</div>',
         unsafe_allow_html=True,
     )
 
-# Sidebar - Project Setup & BO Hyperparameters (EDBO+ Controls)
+# Sidebar - Project Setup & BO Hyperparameters
 with st.sidebar:
     st.header("⚙️ Optimization Setup")
 
@@ -323,7 +323,7 @@ with st.sidebar:
         st.success(st.session_state.project_message)
 
 
-# EDBO+ Main Workflow Tabs
+# Main Workflow Tabs
 tab_dash, tab_recommend, tab_data, tab_wizard, tab_help = st.tabs([
     "📊 Dashboard & Diagnostics",
     "🧪 Batch Recommendations",
@@ -478,9 +478,10 @@ with tab_recommend:
             },
         )
 
-        # Fill in what follows from the entered values: intensity 0 -> FWHM placeholder 30;
-        # intensity and FWHM -> q. The table is then shown again with the new values.
-        edited_sug_df, auto_filled = apply_measurement_rules(edited_sug_df)
+        # Once every row of the batch is entered, fill in what follows from the values:
+        # intensity 0 -> FWHM placeholder 30; intensity and FWHM -> q. The table is then shown
+        # again with the new values. Nothing is filled in while rows are still being typed.
+        edited_sug_df, auto_filled = apply_measurement_rules(edited_sug_df, only_when_complete=True)
         if auto_filled:
             updated_suggestions = st.session_state.last_suggestions.copy().reset_index(drop=True)
             edited_rows = edited_sug_df.reset_index(drop=True)
@@ -497,8 +498,9 @@ with tab_recommend:
         empty_cells = missing_measurements(edited_sug_df)
         if empty_cells:
             st.warning(
-                "**Empty cells:** " + "; ".join(empty_cells) + ". Enter intensity and FWHM (q is then calculated), "
-                "or q directly. For a synthesis without product enter intensity 0; FWHM is then set to 30 and q to 0."
+                "**Empty cells:** " + "; ".join(empty_cells) + ". Enter intensity and FWHM of every row; q is calculated "
+                "for the whole batch once all rows are filled. For a synthesis without product enter intensity 0 "
+                "(FWHM is then set to 30 and q to 0)."
             )
 
         st.markdown("#### Calculate Measurements from .rasx")
@@ -573,6 +575,8 @@ with tab_recommend:
                 st.error("Not saved: " + "; ".join(empty_cells) + " still empty. Fill the cells, or tick the box above to save anyway.")
                 update_clicked = False
             if update_clicked:
+                # rows of a batch saved before it was complete still get their FWHM placeholder and q
+                edited_sug_df, _ = apply_measurement_rules(edited_sug_df)
                 engine_tmp = BOEngine(st.session_state.config)
                 batch_no = engine_tmp._next_batch_count(df_exp)
                 new_rows = []
@@ -722,7 +726,7 @@ with tab_data:
 
 
 # -----------------------------------------------------------------------------
-# TAB 4: Planning Wizard (EDBO+ Project Setup)
+# TAB 4: Planning Wizard (Project Setup)
 # -----------------------------------------------------------------------------
 with tab_wizard:
     st.subheader("🧙 Project Planning & Calibrated Transfer Wizard")
@@ -874,8 +878,9 @@ with tab_help:
 
     with st.expander("✏️ Entering results and correcting mistakes", expanded=False):
         st.markdown(
-            "**Automatic values.** When intensity and FWHM of a row are entered, `q` is calculated at once. "
-            "For a synthesis without product enter intensity `0`: FWHM is set to the placeholder `30` and `q` to `0`.\n\n"
+            "**Automatic values.** Enter intensity and FWHM of all rows of the batch; `q` is then calculated for "
+            "the whole batch at once. For a synthesis without product enter intensity `0` and leave FWHM empty: "
+            "FWHM is set to the placeholder `30` and `q` to `0`.\n\n"
             "**Empty cells.** Rows without a result are listed in a warning under the table. Such a batch is "
             "saved only after you tick *Save although results are missing*; those rows are stored as `suggested`.\n\n"
             "**Correcting a saved batch.** *Reopen Previous Batch* takes the batch you saved last out of the "

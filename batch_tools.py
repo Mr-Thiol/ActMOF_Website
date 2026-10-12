@@ -3,7 +3,8 @@
 batch_tools.py - Helpers for entering and correcting the results of a batch
 
 - apply_measurement_rules: fills in what follows from the entered values
-  (intensity 0 -> FWHM placeholder 30; intensity and FWHM -> q).
+  (intensity 0 -> FWHM placeholder 30; intensity and FWHM -> q), on request
+  only once every row of the batch is entered.
 - missing_measurements: lists the cells that are still empty.
 - pop_last_batch: takes the most recently saved batch out of the experiment table
   so that it can be corrected and saved again.
@@ -23,19 +24,24 @@ REFERENCE_NOTE = "Reference benchmark prior point"
 MEASUREMENT_COLUMNS = ["intensity", "fwhm", "q"]
 
 
-def apply_measurement_rules(table: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+def apply_measurement_rules(table: pd.DataFrame, only_when_complete: bool = False) -> Tuple[pd.DataFrame, List[str]]:
     """Fill in the values that follow from what was entered.
 
     1. intensity = 0 and FWHM empty: FWHM is set to the no-product placeholder 30.
     2. intensity and FWHM both entered: q is calculated from them (replacing a different q).
 
+    With `only_when_complete`, nothing is filled in until every row of the batch is entered
+    (see missing_measurements), so that q appears for the whole batch at once.
+
     Returns the table with numeric measurement columns and one message per change;
-    an empty list means nothing had to be filled in.
+    an empty list means nothing was filled in.
     """
     out = table.copy()
     for col in MEASUREMENT_COLUMNS:
         out[col] = pd.to_numeric(out[col], errors="coerce") if col in out.columns else np.nan
     messages: List[str] = []
+    if only_when_complete and missing_measurements(out):
+        return out, messages
     for label in out.index:
         intensity, fwhm, q = (float(out.at[label, c]) for c in MEASUREMENT_COLUMNS)
         if np.isfinite(intensity) and intensity == 0 and not np.isfinite(fwhm):
@@ -53,13 +59,15 @@ def apply_measurement_rules(table: pd.DataFrame) -> Tuple[pd.DataFrame, List[str
 def missing_measurements(table: pd.DataFrame) -> List[str]:
     """Rows whose result is incomplete, as 'label (empty cells)'.
 
-    A row is complete when intensity and FWHM are both entered, or when q is entered directly.
+    A row is complete when intensity and FWHM are both entered, when intensity is 0 (the FWHM
+    placeholder follows from it), or when q is entered directly.
     """
     missing: List[str] = []
     for label, row in table.iterrows():
         values = {c: pd.to_numeric(pd.Series([row.get(c)]), errors="coerce").iloc[0] for c in MEASUREMENT_COLUMNS}
         has_pair = np.isfinite(values["intensity"]) and np.isfinite(values["fwhm"])
-        if has_pair or np.isfinite(values["q"]):
+        no_product = np.isfinite(values["intensity"]) and values["intensity"] == 0
+        if has_pair or no_product or np.isfinite(values["q"]):
             continue
         empty = [c for c in ("intensity", "fwhm") if not np.isfinite(values[c])]
         missing.append(f"{label} ({', '.join(empty)})")
