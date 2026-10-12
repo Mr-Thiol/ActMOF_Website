@@ -92,6 +92,9 @@ an exported `experiments.csv`.
    - Upload the `.rasx` XRD file for a row and click *Fill Selected Row with Calculated Measurements*
      — the app computes intensity, FWHM, and q for you and shows the fitted half-width markers on the
      diffractogram.
+   As soon as intensity and FWHM of a row are entered, `q` is calculated. For a synthesis without
+   product enter intensity `0`: FWHM is then set to the placeholder `30` and `q` to `0`. Rows that are
+   still empty are listed in a warning under the table.
 6. Click **🔄 Update Model & Save Batch Results** — this saves your measurements into the experiment
    log, immediately re-fits the model, and proposes the next batch. Repeat from step 5.
 7. **Dashboard tab** — at any point, check the 6-panel diagnostics: best-q-so-far progress, q per
@@ -132,7 +135,7 @@ patterns from that reference data for your first `M` batches, so your early reco
 smarter than pure guessing — and as your own results come in, the app blends in more and more of your
 own data and relies less on the reference set.
 
-**Rigorously:** A reference GP is fit once on the built-in benchmark set (96 conditions with known q).
+**Rigorously:** A reference GP is fit once on the built-in benchmark set (95 conditions with known q; 96 recorded syntheses, one condition measured twice and averaged).
 For each of your own completed points, its reference-GP prediction `mu_ref(x)` is linearly calibrated
 against your actual `y = ln(1+q)` via ridge-regularized least squares, `y ≈ a + b·mu_ref(x)`, with the
 ridge term pulling `b` toward 1 when you have very little data of your own (regularization strength
@@ -212,5 +215,11 @@ were already tried are skipped; if none is left, the app goes back to the full d
   trend to model.
 - **My data disappeared after a refresh.** A web session is not stored on the server. Download the
   project file (sidebar → *Download Project (.zip)*) before you leave, and upload it to continue.
+- **I saved a batch with a wrong value.** Batch Recommendations → *Reopen Previous Batch*. The batch
+  you saved last is taken out of the experiment table and shown again with your values; correct them
+  and click *Update Model & Save Batch Results*. The next batch is then proposed anew. Clicking the
+  button again goes back one more batch.
+- **The app does not save my batch.** A batch with empty result cells is saved only after you tick
+  *Save although results are missing*; rows without a result are then stored as `suggested`.
 - **I want to reset everything.** Sidebar → *Clear All Data*. This clears the experiment log and any
   active suggestions in this session (it does not touch anything you've already exported).

@@ -39,6 +39,7 @@ from bo_engine import (
     now_text,
     valid_condition_values,
 )
+from batch_tools import apply_measurement_rules, missing_measurements, pop_last_batch
 from project_io import (
     build_project_zip,
     candidate_template_csv,
@@ -108,6 +109,8 @@ def init_session_state():
         st.session_state.uploaded_file_signature = None
     if "suggestions_editor_version" not in st.session_state:
         st.session_state.suggestions_editor_version = 0
+    if "auto_fill_message" not in st.session_state:
+        st.session_state.auto_fill_message = ""
     if "project_file_signature" not in st.session_state:
         st.session_state.project_file_signature = None
     if "project_message" not in st.session_state:
@@ -414,6 +417,25 @@ with tab_recommend:
                 st.session_state.last_message = msg
                 st.session_state.suggestions_editor_version += 1
 
+    with col_info:
+        remaining_exp, previous_batch = pop_last_batch(st.session_state.experiments)
+        reopen_clicked = st.button(
+            "↩️ Reopen Previous Batch",
+            disabled=previous_batch is None,
+            help="Made a mistake? This takes the batch you saved last out of the experiment table and shows it "
+                 "below again, so you can correct the values and save it once more. The batch proposed after it is discarded.",
+        )
+        if reopen_clicked and previous_batch is not None:
+            st.session_state.experiments = remaining_exp
+            st.session_state.last_suggestions = previous_batch
+            st.session_state.last_message = (
+                f"The previous batch ({len(previous_batch)} row(s)) is open again and was taken out of the experiment table. "
+                "Correct the values below and click 'Update Model & Save Batch Results'."
+            )
+            st.session_state.auto_fill_message = ""
+            st.session_state.suggestions_editor_version += 1
+            st.rerun()
+
     if has_session_prediction:
         st.caption("Initialize BO Optimization is disabled because this session already has active suggestions. Enter results below and click 'Update Model' to re-run.")
 
@@ -455,6 +477,29 @@ with tab_recommend:
                 "notes": st.column_config.TextColumn("Notes"),
             },
         )
+
+        # Fill in what follows from the entered values: intensity 0 -> FWHM placeholder 30;
+        # intensity and FWHM -> q. The table is then shown again with the new values.
+        edited_sug_df, auto_filled = apply_measurement_rules(edited_sug_df)
+        if auto_filled:
+            updated_suggestions = st.session_state.last_suggestions.copy().reset_index(drop=True)
+            edited_rows = edited_sug_df.reset_index(drop=True)
+            for col in show_cols:
+                if col in updated_suggestions.columns and col in edited_rows.columns:
+                    updated_suggestions[col] = edited_rows[col]
+            st.session_state.last_suggestions = updated_suggestions
+            st.session_state.auto_fill_message = "; ".join(auto_filled)
+            st.session_state.suggestions_editor_version += 1
+            st.rerun()
+        if st.session_state.auto_fill_message:
+            st.caption(f"Filled in automatically: {st.session_state.auto_fill_message}.")
+
+        empty_cells = missing_measurements(edited_sug_df)
+        if empty_cells:
+            st.warning(
+                "**Empty cells:** " + "; ".join(empty_cells) + ". Enter intensity and FWHM (q is then calculated), "
+                "or q directly. For a synthesis without product enter intensity 0; FWHM is then set to 30 and q to 0."
+            )
 
         st.markdown("#### Calculate Measurements from .rasx")
         rasx_file = st.file_uploader(
@@ -516,7 +561,18 @@ with tab_recommend:
 
         col_update, col_dl = st.columns([2, 1])
         with col_update:
-            if st.button("🔄 Update Model & Save Batch Results", type="primary", use_container_width=True):
+            save_incomplete = False
+            if empty_cells:
+                save_incomplete = st.checkbox(
+                    "Save although results are missing (rows without a result are stored as 'suggested')",
+                    value=False,
+                    key=f"save_incomplete_{st.session_state.suggestions_editor_version}",
+                )
+            update_clicked = st.button("🔄 Update Model & Save Batch Results", type="primary", use_container_width=True)
+            if update_clicked and empty_cells and not save_incomplete:
+                st.error("Not saved: " + "; ".join(empty_cells) + " still empty. Fill the cells, or tick the box above to save anyway.")
+                update_clicked = False
+            if update_clicked:
                 engine_tmp = BOEngine(st.session_state.config)
                 batch_no = engine_tmp._next_batch_count(df_exp)
                 new_rows = []
@@ -568,6 +624,7 @@ with tab_recommend:
                         if col not in new_sug_df.columns:
                             new_sug_df[col] = np.nan if col != "notes" else ""
                     st.session_state.last_suggestions = new_sug_df
+                    st.session_state.auto_fill_message = ""
                     st.session_state.last_message = f"Batch results saved! Model re-fitted with {len(completed_df)} completed run(s). {msg}"
                     st.session_state.suggestions_editor_version += 1
 
@@ -813,6 +870,18 @@ with tab_help:
             "status, <features>, intensity, fwhm, q, predicted_q_mean, predicted_q_sd, "
             "acquisition_value, notes, created_at, updated_at`) — see `experiments.csv` in the "
             "repository for a worked example."
+        )
+
+    with st.expander("✏️ Entering results and correcting mistakes", expanded=False):
+        st.markdown(
+            "**Automatic values.** When intensity and FWHM of a row are entered, `q` is calculated at once. "
+            "For a synthesis without product enter intensity `0`: FWHM is set to the placeholder `30` and `q` to `0`.\n\n"
+            "**Empty cells.** Rows without a result are listed in a warning under the table. Such a batch is "
+            "saved only after you tick *Save although results are missing*; those rows are stored as `suggested`.\n\n"
+            "**Correcting a saved batch.** *Reopen Previous Batch* takes the batch you saved last out of the "
+            "experiment table and shows it again with the values you entered. Correct them and click "
+            "*Update Model & Save Batch Results*; the next batch is then proposed anew. Click it again to go "
+            "back one more batch."
         )
 
     with st.expander("💾 Saving your work, candidate lists and figures", expanded=False):
