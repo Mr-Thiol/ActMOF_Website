@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -37,6 +38,14 @@ from bo_engine import (
     make_figure,
     now_text,
     valid_condition_values,
+)
+from project_io import (
+    build_project_zip,
+    candidate_template_csv,
+    figure_png_bytes,
+    load_project_zip,
+    normalize_experiments,
+    read_candidate_csv,
 )
 
 # Set page config
@@ -99,6 +108,14 @@ def init_session_state():
         st.session_state.uploaded_file_signature = None
     if "suggestions_editor_version" not in st.session_state:
         st.session_state.suggestions_editor_version = 0
+    if "project_file_signature" not in st.session_state:
+        st.session_state.project_file_signature = None
+    if "project_message" not in st.session_state:
+        st.session_state.project_message = ""
+    if "candidate_file_signature" not in st.session_state:
+        st.session_state.candidate_file_signature = None
+    if "candidate_message" not in st.session_state:
+        st.session_state.candidate_message = ""
 
 
 init_session_state()
@@ -160,7 +177,8 @@ with st.sidebar:
         )
         st.session_state.config["transfer_prior_fraction"] = frac
         st.session_state.config["transfer_rounds_mode"] = st.radio(
-            "Transfer Rounds Mode", options=["auto", "manual"], index=0
+            "Transfer Rounds Mode", options=["auto", "manual"],
+            index=1 if st.session_state.config.get("transfer_rounds_mode") == "manual" else 0,
         )
         if st.session_state.config["transfer_rounds_mode"] == "manual":
             st.session_state.config["transfer_prior_rounds"] = st.number_input(
@@ -205,6 +223,102 @@ with st.sidebar:
             st.warning("Cleared active experiments dataset.")
             st.rerun()
 
+    st.markdown("---")
+    st.subheader("🎯 Candidate Conditions")
+    custom_pool = st.session_state.candidate_pool
+    if custom_pool is not None and len(custom_pool) > 0:
+        st.success(f"Suggestions are chosen from your list of {len(custom_pool):,} conditions.")
+        if st.button("Use the Full Design Space Instead", use_container_width=True):
+            st.session_state.candidate_pool = None
+            st.session_state.config["candidate_mode"] = "random"
+            st.session_state.candidate_message = ""
+            st.rerun()
+    else:
+        st.caption("Suggestions are chosen from a random sample of the full design space. Upload a CSV to restrict them to your own list of conditions.")
+    with st.expander("Upload a Candidate List (CSV)", expanded=False):
+        candidate_file = st.file_uploader(
+            "CSV with the five condition columns",
+            type=["csv"],
+            key="candidate_pool_upload",
+            help="Columns: " + ", ".join(FEATURES) + ". Integer codes inside the allowed ranges; other columns are ignored.",
+        )
+        if candidate_file is None:
+            st.session_state.candidate_file_signature = None
+        else:
+            candidate_signature = (candidate_file.name, candidate_file.size)
+            if st.session_state.candidate_file_signature != candidate_signature:
+                st.session_state.candidate_file_signature = candidate_signature
+                candidate_loaded = False
+                try:
+                    pool_df, pool_report = read_candidate_csv(io.BytesIO(candidate_file.getvalue()))
+                    st.session_state.candidate_pool = pool_df
+                    st.session_state.config["candidate_mode"] = "csv"
+                    st.session_state.candidate_message = pool_report
+                    candidate_loaded = True
+                except Exception as exc:
+                    st.session_state.candidate_message = ""
+                    st.error(f"Could not use this candidate CSV: {exc}")
+                if candidate_loaded:
+                    st.rerun()
+        if st.session_state.candidate_message:
+            st.info(st.session_state.candidate_message + " The list is used from the next batch on.")
+        st.download_button(
+            label="📥 Download CSV Template",
+            data=candidate_template_csv(),
+            file_name="candidate_pool_template.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    st.markdown("---")
+    st.subheader("💾 Project File")
+    st.caption("Data live only in this browser session. Download the project file to keep your work, and upload it later to continue.")
+    project_slug = re.sub(r"[^A-Za-z0-9_-]+", "_", str(st.session_state.config.get("project_name", "project"))).strip("_") or "project"
+    st.download_button(
+        label="📥 Download Project (.zip)",
+        data=build_project_zip(
+            st.session_state.config,
+            st.session_state.experiments,
+            st.session_state.candidate_pool,
+            st.session_state.last_suggestions,
+        ),
+        file_name=f"actmof_{project_slug}_{now_text()[:10]}.zip",
+        mime="application/zip",
+        use_container_width=True,
+        help="Settings, all experiments, your candidate list and the batch that is currently proposed.",
+    )
+    project_file = st.file_uploader(
+        "Upload Project (.zip)",
+        type=["zip"],
+        key="project_file_upload",
+        help="A project file downloaded here, or a zipped project folder of the desktop app.",
+    )
+    if project_file is None:
+        st.session_state.project_file_signature = None
+    else:
+        project_signature = (project_file.name, project_file.size)
+        if st.session_state.project_file_signature != project_signature:
+            st.session_state.project_file_signature = project_signature
+            project_loaded = False
+            try:
+                project = load_project_zip(project_file.getvalue())
+                st.session_state.config = project["config"]
+                st.session_state.experiments = project["experiments"]
+                st.session_state.candidate_pool = project["candidate_pool"]
+                st.session_state.last_suggestions = project["suggestions"]
+                st.session_state.last_message = ""
+                st.session_state.candidate_message = ""
+                st.session_state.suggestions_editor_version += 1
+                st.session_state.project_message = project["summary"]
+                project_loaded = True
+            except Exception as exc:
+                st.session_state.project_message = ""
+                st.error(f"Could not load this project file: {exc}")
+            if project_loaded:
+                st.rerun()
+    if st.session_state.project_message:
+        st.success(st.session_state.project_message)
+
 
 # EDBO+ Main Workflow Tabs
 tab_dash, tab_recommend, tab_data, tab_wizard, tab_help = st.tabs([
@@ -246,6 +360,12 @@ with tab_dash:
         config=st.session_state.config,
     )
     st.pyplot(fig, use_container_width=True)
+    st.download_button(
+        label="📥 Download Figure (PNG)",
+        data=figure_png_bytes(fig),
+        file_name=f"actmof_diagnostics_{now_text()[:10]}.png",
+        mime="image/png",
+    )
 
     if summary_msg:
         st.info(f"**Model Status:** {summary_msg}")
@@ -474,25 +594,29 @@ with tab_data:
     col_up, col_dl_all = st.columns([2, 1])
     with col_up:
         uploaded_file = st.file_uploader("Upload Experiments CSV", type=["csv"])
-        if uploaded_file is not None:
-            try:
-                uploaded_df = pd.read_csv(uploaded_file)
-                if all(f in uploaded_df.columns for f in FEATURES):
-                    if "status" not in uploaded_df.columns:
-                        uploaded_df["status"] = "completed"
-                    if "q" not in uploaded_df.columns and "intensity" in uploaded_df.columns and "fwhm" in uploaded_df.columns:
-                        uploaded_df["q"] = [calc_q(i, f) for i, f in zip(uploaded_df["intensity"], uploaded_df["fwhm"])]
-                    upload_signature = (uploaded_file.name, uploaded_file.size)
-                    if st.session_state.uploaded_file_signature != upload_signature:
+        if uploaded_file is None:
+            st.session_state.uploaded_file_signature = None
+        else:
+            upload_signature = (uploaded_file.name, uploaded_file.size)
+            if st.session_state.uploaded_file_signature != upload_signature:
+                csv_loaded = False
+                try:
+                    raw_df = pd.read_csv(uploaded_file)
+                    if all(f in [str(c).strip() for c in raw_df.columns] for f in FEATURES):
+                        uploaded_df = normalize_experiments(raw_df)
+                        st.session_state.uploaded_file_signature = upload_signature
                         st.session_state.last_suggestions = None
                         st.session_state.last_message = ""
-                        st.session_state.uploaded_file_signature = upload_signature
-                    st.session_state.experiments = uploaded_df
-                    st.success(f"Successfully loaded {len(uploaded_df)} rows from uploaded file!")
-                else:
-                    st.error(f"Uploaded CSV must contain feature columns: {FEATURES}")
-            except Exception as e:
-                st.error(f"Error parsing uploaded CSV: {e}")
+                        st.session_state.experiments = uploaded_df
+                        csv_loaded = True
+                    else:
+                        st.error(f"Uploaded CSV must contain feature columns: {FEATURES}")
+                except Exception as e:
+                    st.error(f"Error parsing uploaded CSV: {e}")
+                if csv_loaded:
+                    st.rerun()
+            else:
+                st.success(f"Loaded {uploaded_file.name}. Later edits and new batches are kept; remove the file above to upload another one.")
 
     with col_dl_all:
         if len(st.session_state.experiments) > 0:
@@ -689,6 +813,23 @@ with tab_help:
             "status, <features>, intensity, fwhm, q, predicted_q_mean, predicted_q_sd, "
             "acquisition_value, notes, created_at, updated_at`) — see `experiments.csv` in the "
             "repository for a worked example."
+        )
+
+    with st.expander("💾 Saving your work, candidate lists and figures", expanded=False):
+        st.markdown(
+            "**Project file.** The web app keeps your data only in the current browser session; a "
+            "refresh or a long pause clears it. *Download Project (.zip)* in the sidebar saves the "
+            "settings, all experiments, your candidate list and the batch that is currently proposed. "
+            "*Upload Project (.zip)* restores them. The archive holds `project_config.json`, "
+            "`experiments.csv`, `candidate_pool.csv` and `active_suggestions.csv`, the same files as a "
+            "project folder of the desktop app, so the two can be exchanged.\n\n"
+            "**Candidate list.** By default the next conditions are chosen from a random sample of the full design space. "
+            "To restrict them (for example to amounts you can dispense, or to a temperature range), "
+            "upload a CSV with the five feature columns under *Candidate Conditions* in the sidebar. "
+            "Rows with missing or non-integer values, values outside the allowed ranges and duplicates "
+            "are dropped, and the number kept is reported. Conditions already tried are skipped; if "
+            "none is left, the app goes back to the full design space.\n\n"
+            "**Figure.** *Download Figure (PNG)* under the Dashboard panels saves the diagnostic figure."
         )
 
     with st.expander("🛠️ Troubleshooting / FAQ", expanded=False):

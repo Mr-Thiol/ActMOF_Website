@@ -52,6 +52,7 @@ uv run streamlit run app.py
 | File | Description |
 |------|-------------|
 | `app.py` | **Main Streamlit Web Application** (EDBO+-inspired UI workflow) |
+| `project_io.py` | Project files (.zip), candidate lists (.csv) and figure export for the web app |
 | `bo_engine.py` | Standalone BO & GP engine (Matern 3/2 & 5/2, Calibrated Transfer Prior, Matplotlib plotting) |
 | `HELP.md` | Full user guide (also mirrored in the app's ❓ Help & Guide tab) |
 | `.streamlit/config.toml` | Streamlit runtime configuration for Community Cloud |
@@ -68,6 +69,9 @@ uv run streamlit run app.py
   - **📊 Dashboard & Visual Diagnostics:** Live metric summaries, model status banner, and embedded 6-panel Matplotlib diagnostics (Best $q$ progress, $q$ trajectory, Observed vs Predicted parity, Uncertainty landscape, Acquisition landscape, and 2D Parameter map).
   - **🧪 Batch Recommendations:** Run BO optimization, view proposed synthesis conditions, and instantly export results as `.csv`.
   - **📝 Experiment Data Entry:** Upload prior `experiments.csv` files, interactively edit measurement data (`intensity`, `fwhm`, `q`), and download updated logs.
+  - **💾 Project Files:** Download the whole project (settings, experiments, candidate list, active batch) as one `.zip` and upload it later to continue; the archive has the layout of a desktop-app project folder.
+  - **🎯 Custom Candidate Lists:** Upload a `.csv` of allowed conditions to restrict what the optimizer may suggest.
+  - **🖼️ Figure Export:** Download the 6-panel diagnostic figure as `.png`.
   - **🧙 Project Planning Wizard:** Configure iteration bounds and compute the calibrated-transfer prior window $M = \lfloor \text{mean\_range} \times \text{fraction} \rfloor$.
 - **Zero Heavy ML Dependencies:** Pure NumPy Gaussian Process engine with Matérn kernels and grid-searched hyperparameter tuning.
 - **Calibrated Transfer Learning (Mode C):** Leverages built-in benchmark data to accelerate early-round optimization before student data accumulates.

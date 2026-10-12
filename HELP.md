@@ -168,6 +168,30 @@ predicted_q_sd, acquisition_value, notes, created_at, updated_at`) — see `expe
 for a worked example spanning an initial calibrated-transfer batch through several rounds of
 student-only optimization.
 
+### Project file (save and continue later)
+
+The web app keeps your data only in the current browser session; a page refresh or a long pause clears
+it. **Download Project (.zip)** in the sidebar saves the settings, all experiments, your candidate list
+and the batch that is currently proposed; **Upload Project (.zip)** restores them. The archive holds
+`project_config.json`, `experiments.csv`, `candidate_pool.csv` (only with a custom candidate list) and
+`active_suggestions.csv` (only while a batch is proposed). These are the files of a project folder of
+the desktop app, so an unzipped project file opens in the desktop app and a zipped desktop project
+folder loads here.
+
+### Candidate list (restrict what can be suggested)
+
+By default the next conditions are chosen from a random sample of the full design space. To restrict
+them, for example to a temperature range or to amounts you can dispense, upload a CSV with the five
+feature columns under **Candidate Conditions** in the sidebar (a template can be downloaded there).
+Values are the integer codes of the app. Rows with missing or non-integer values, values outside the
+allowed ranges and duplicates are dropped, and the number of conditions kept is shown. Conditions that
+were already tried are skipped; if none is left, the app goes back to the full design space.
+**Use the Full Design Space Instead** removes the list.
+
+### Figure
+
+**Download Figure (PNG)** under the Dashboard panels saves the six diagnostic panels as one image.
+
 ---
 
 ## 10. Troubleshooting / FAQ
@@ -186,5 +210,7 @@ student-only optimization.
   you have under 3 completed current-project points and transfer prior is off, or your q values so far
   are all identical — the app is deliberately exploring rather than exploiting until there's a real
   trend to model.
+- **My data disappeared after a refresh.** A web session is not stored on the server. Download the
+  project file (sidebar → *Download Project (.zip)*) before you leave, and upload it to continue.
 - **I want to reset everything.** Sidebar → *Clear All Data*. This clears the experiment log and any
   active suggestions in this session (it does not touch anything you've already exported).
